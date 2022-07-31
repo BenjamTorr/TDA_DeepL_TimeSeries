@@ -30,9 +30,9 @@ import os
 from sklearn.utils import shuffle
 
 def load_data(path_train, path_test):
-  """ Read data and labels from arff file and return X train X test and labels y, 
+  """ Read data and labels from arff file and return X train X test and labels y,
       in shape (n_samples, length, 1) and (n_samples)
-      
+
       Parameters
       ----------
       path_train: string path of the train set
@@ -124,9 +124,9 @@ def load_full(path_train, path_test, path_folder_save, n_bins=200, max_edge_leng
   ----------
   path_train: a string containing the path to the train data in arff extension
   path_test: a string containing the path to the test data in arff extension
-  path_folder_save: a string cointaning the path to the folder where the data 
-  sould be written after being calculated, it should be empty if the betti 
-  seuqneces has not been calculated, if they have already been calculated it 
+  path_folder_save: a string cointaning the path to the folder where the data
+  sould be written after being calculated, it should be empty if the betti
+  seuqneces has not been calculated, if they have already been calculated it
   should have the data in txt formata
   n_bins: number of points for a discretization of Betti Curves
   max_edge_length: Max length considered in Vietoris Rips complexes
@@ -168,6 +168,82 @@ def load_full(path_train, path_test, path_folder_save, n_bins=200, max_edge_leng
     Hom_train = Hom_train.reshape(samples_train,int(len(Hom_train) / (samples_train)), 3)
     Hom_test = Hom_test.reshape(samples_test,int(len(Hom_test) / (samples_test)), 3)
   return BS_train, BS_test, y_train, y_test, Hom_train, Hom_test
+
+
+
+#### Problema que cuando son multivariados se repite todos
+
+
+def load_full_multivariate(path_train, path_test, path_folder_save, n_dims, n_bins=200, max_edge_length=1, standarized=True):
+  """Load all the data when there are multivariate time series, it also converts its in individuals betti sequences.
+
+  Parameters
+  ----------
+  path_train: an array of strings containing the paths to the train data in arff extension (in each dimension)
+  path_test: an array of strings containing the path to the test data in arff extension (in each dimension)
+  path_folder_save: a string cointaning the path to the folder where the data
+  sould be written after being calculated, it should be empty if the betti
+  seuqneces has not been calculated, if they have already been calculated it
+  should have the data in txt formata
+  n_bins: number of points for a discretization of Betti Curves
+  max_edge_length: Max length considered in Vietoris Rips complexes
+  standarized: whether the betti sequence are going to be standarized or not
+
+  Returns
+  --------
+  BS_train: np array Betti Sequences of train data set in shape (n_dims, n_samples_train, 2 * n_bins, 1)
+  BS_test: np array Betti Sequences of test data set in shape (n_dims, n_samples_test, 2 * n_bins, 1)
+  y_train: np. array of shape (n_samples_train,)
+  y_test: np.array of shape (n_samples_test,)
+  Hom_train: Birth and death points of persistence diagram in train data
+  Hom_test: Birth and death points of persistence diagrama in test data
+  """
+
+  BS_TrD = [None for i in range(n_dims)]
+  BS_TeD = [None for i in range(n_dims)]
+  Hom_trD = [None for i in range(n_dims)]
+  Hom_teD = [None for i in range(n_dims)]
+  if len(os.listdir(path_folder_save)) == 0: #Check if the data has already been calculated
+    for i in range(n_dims):
+      X_train, X_test, y_train, y_test = load_data(path_train[n_dims], path_test[n_dims])
+      BC_train, BC_test, Hom_train, Hom_test, BC = get_betti_curv(X_train, X_test, n_bins=n_bins, max_edge_length=max_edge_length)
+      BS_train, BS_test = get_betti_seq(BC_train, BC_test, standarized=standarized)
+      to_save =[BS_train, BS_test, Hom_train, Hom_test, np.expand_dims(y_train,axis=-1), np.expand_dims(y_test,axis=-1)]
+      paths = ['BS_train', 'BS_test', 'Hom_train', 'Hom_test', 'y_train', 'y_test']
+      folder_save_dim = "Betti_curve_dim" + str(i)
+      new_folder_save = path_folder_save + "/" + folder_save_dim
+      os.mkdir(new_folder_save)
+      for i in range(len(paths)):
+        file = open(new_folder_save + '/' + paths[i] + '.txt', "w")
+        for row in to_save[i]:
+          np.savetxt(file, row)
+        file.close()
+      BS_TrD[i] = BS_train
+      BS_TeD[i] = BS_test
+      Hom_trD[i] = Hom_train
+      Hom_teD[i] = Hom_test
+  else:
+    for i in range(n_dims):
+      folder_save_dim = "Betti_curve_dim" + str(i)
+      new_folder_save = path_folder_save + "/" + folder_save_dim
+      BS_train = np.loadtxt(new_folder_save + '/BS_train.txt')
+      BS_test = np.loadtxt(new_folder_save + '/BS_test.txt')
+      Hom_train = np.loadtxt(new_folder_save + '/Hom_train.txt')
+      Hom_test = np.loadtxt(new_folder_save + '/Hom_test.txt')
+      y_train = np.loadtxt(new_folder_save + '/y_train.txt')
+      y_test = np.loadtxt(new_folder_save + '/y_test.txt')
+      #reshape data
+      samples_train = int(len(BS_train) / (2 * n_bins))
+      samples_test = int(len(BS_test) / (2 * n_bins))
+      BS_train = BS_train.reshape(samples_train, int(2 * n_bins), 1)
+      BS_test = BS_test.reshape(samples_test, int(2 * n_bins), 1)
+      Hom_train = Hom_train.reshape(samples_train,int(len(Hom_train) / (samples_train)), 3)
+      Hom_test = Hom_test.reshape(samples_test,int(len(Hom_test) / (samples_test)), 3)
+      BS_TrD[i] = BS_train
+      BS_TeD[i] = BS_test
+      Hom_trD[i] = Hom_train
+      Hom_teD[i] = Hom_test
+  return BS_trD, BS_teD, y_train, y_test, Hom_trD, Hom_teD
 
 """# ML part"""
 
@@ -272,10 +348,10 @@ def train(model, BS_train, y_train, parameters):
   if ClassWeight:
     weight = class_weight.compute_class_weight('balanced',classes=np.unique(y_train), y=y_train)
     class_weights = dict(zip(range(len(weight)),weight))
-    history = model.fit(BS_train, to_categorical(y_train), epochs=epochs, validation_split=validation_split, 
+    history = model.fit(BS_train, to_categorical(y_train), epochs=epochs, validation_split=validation_split,
                         verbose = verbose, class_weight=class_weights, batch_size=batch_size)
   else:
-    history = model.fit(BS_train, to_categorical(y_train), epochs=epochs, validation_split=validation_split, 
+    history = model.fit(BS_train, to_categorical(y_train), epochs=epochs, validation_split=validation_split,
                         verbose = verbose, batch_size=batch_size)
   return history, model
 
@@ -294,7 +370,7 @@ def acc_avg(iterations, model, BS_train, y_train, BS_test, y_test, parameters):
   --------
   mean: mean of the test set accuracy sample
   std: standard deviation of test set accuracy sample
-  
+
   """
   BS_test, y_test = shuffle(BS_test, y_test)
   avg = []
@@ -317,7 +393,7 @@ def plot_history(history):
   pass
 
 def full_report(model,BS_train, y_train, BS_test, y_test, parameters):
-  """A full report about a keras model compiled but not already fitted, it contains model summary, classification report, 
+  """A full report about a keras model compiled but not already fitted, it contains model summary, classification report,
   test set accuracy and confusion matrix
 
   Parameters
@@ -329,8 +405,8 @@ def full_report(model,BS_train, y_train, BS_test, y_test, parameters):
   y_test: np.array of shape (n_samples_test,)
   parameters: array with hyperparamets for trainning
   """
-  
-  history, model = train(model, BS_train, y_train, parameters)  
+
+  history, model = train(model, BS_train, y_train, parameters)
   print(model.summary())
   plot_history(history)
   y_pred = model.predict(BS_test)
@@ -339,4 +415,4 @@ def full_report(model,BS_train, y_train, BS_test, y_test, parameters):
   print('Test set accuracy:', acc_test)
   pass
 
-
+-
